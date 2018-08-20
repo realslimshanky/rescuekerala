@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 from django.core.validators import RegexValidator
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator
 
 districts = (
     ('alp','Alappuzha - ആലപ്പുഴ'),
@@ -323,51 +324,57 @@ class RescueCamp(models.Model):
 
 
 class Person(models.Model):
-    name = models.CharField(max_length=30,blank=False,null=False,verbose_name="Name - പേര്")
-    phone = models.CharField(max_length=11,null=True,blank=True,verbose_name='Mobile - മൊബൈൽ')
-    age = models.IntegerField(null=True,blank=True,verbose_name="Age - പ്രായം")
+    name = models.CharField(max_length=30, blank=False, null=False, verbose_name="Name - പേര്")
+    phone = models.CharField(max_length=11, null=True, blank=True, verbose_name='Mobile - മൊബൈൽ')
+    age = models.IntegerField(null=True, blank=True, verbose_name="Age - പ്രായം",
+                              validators=[MinValueValidator(0)])
     gender = models.IntegerField(
-        choices = gender,
+        choices=gender,
         verbose_name='Gender - ലിംഗം',
-        null=True,blank=True
+        null=True,
+        blank=True
     )
-    address = models.TextField(max_length=150,null=True,blank=True,verbose_name="Address - വിലാസം")
+    address = models.TextField(max_length=150, null=True, blank=True, verbose_name="Address - വിലാസം")
     district = models.CharField(
-        max_length = 15,
-        choices = districts,
+        max_length=15,
+        choices=districts,
         verbose_name='Residence District - താമസിക്കുന്ന ജില്ല',
-        null=True,blank=True
+        null=True,
+        blank=True
     )
-    notes = models.TextField(max_length=500,null=True,blank=True,verbose_name='Notes - കുറിപ്പുകൾ')
-    camped_at = models.ForeignKey(RescueCamp,models.CASCADE,blank=False,null=False,verbose_name='Camp Name - ക്യാമ്പിന്റെ പേര്')
+    notes = models.TextField(max_length=500, null=True, blank=True, verbose_name='Notes - കുറിപ്പുകൾ')
+    camped_at = models.ForeignKey(
+        RescueCamp, models.CASCADE,
+        blank=False, null=False,
+        verbose_name='Camp Name - ക്യാമ്പിന്റെ പേര്')
     added_at = models.DateTimeField(auto_now_add=True)
 
     @property
     def sex(self):
         return {
-            0:'Male',
-            1:'Female',
-            2:'Others'
+            0: 'Male',
+            1: 'Female',
+            2: 'Others'
         }.get(self.gender, 'Unknown')
 
     @property
     def district_name(self):
         return {
-                'alp':'Alappuzha - ആലപ്പുഴ',
-                'ekm':'Ernakulam - എറണാകുളം',
-                'idk':'Idukki - ഇടുക്കി',
-                'knr':'Kannur - കണ്ണൂർ',
-                'ksr':'Kasaragod - കാസർഗോഡ്',
-                'kol':'Kollam - കൊല്ലം',
-                'ktm':'Kottayam - കോട്ടയം',
-                'koz':'Kozhikode - കോഴിക്കോട്',
-                'mpm':'Malappuram - മലപ്പുറം',
-                'pkd':'Palakkad - പാലക്കാട്',
-                'ptm':'Pathanamthitta - പത്തനംതിട്ട',
-                'tvm':'Thiruvananthapuram - തിരുവനന്തപുരം',
-                'tcr':'Thrissur - തൃശ്ശൂർ',
-                'wnd':'Wayanad - വയനാട്',
-                }.get(self.district, 'Unknown')
+            'alp': 'Alappuzha - ആലപ്പുഴ',
+            'ekm': 'Ernakulam - എറണാകുളം',
+            'idk': 'Idukki - ഇടുക്കി',
+            'knr': 'Kannur - കണ്ണൂർ',
+            'ksr': 'Kasaragod - കാസർഗോഡ്',
+            'kol': 'Kollam - കൊല്ലം',
+            'ktm': 'Kottayam - കോട്ടയം',
+            'koz': 'Kozhikode - കോഴിക്കോട്',
+            'mpm': 'Malappuram - മലപ്പുറം',
+            'pkd': 'Palakkad - പാലക്കാട്',
+            'ptm': 'Pathanamthitta - പത്തനംതിട്ട',
+            'tvm': 'Thiruvananthapuram - തിരുവനന്തപുരം',
+            'tcr': 'Thrissur - തൃശ്ശൂർ',
+            'wnd': 'Wayanad - വയനാട്',
+        }.get(self.district, 'Unknown')
 
     class Meta:
         verbose_name = 'Relief: Refugee'

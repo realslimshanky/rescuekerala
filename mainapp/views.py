@@ -342,10 +342,11 @@ class PersonForm(CustomForm):
        #    print(field_name)
        #    field.widget.attrs['class'] = 'form-control'
 
-class AddPerson(SuccessMessageMixin,LoginRequiredMixin,CreateView):
+
+class AddPerson(SuccessMessageMixin, LoginRequiredMixin, CreateView):
     login_url = '/login/'
     model = Person
-    template_name='mainapp/add_person.html'
+    template_name = 'mainapp/add_person.html'
     form_class = PersonForm
     success_message = "'%(name)s' registered successfully"
 
@@ -353,7 +354,7 @@ class AddPerson(SuccessMessageMixin,LoginRequiredMixin,CreateView):
         return reverse('add_person', args=(self.camp_id,))
 
     def dispatch(self, request, *args, **kwargs):
-        self.camp_id = kwargs.get('camp_id','')
+        self.camp_id = kwargs.get('camp_id', '')
 
         try:
             self.camp = RescueCamp.objects.get(id=int(self.camp_id))
