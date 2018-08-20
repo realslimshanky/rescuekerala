@@ -181,7 +181,7 @@ def relief_camps(request):
     return render(request,"mainapp/relief_camps.html")
 
 def relief_camps_list(request):
-    filter = RescueCampFilter(request.GET, queryset=RescueCamp.objects.all())
+    filter = RescueCampFilter(request.GET, queryset=RescueCamp.objects.filter(status='active'))
     relief_camps = filter.qs.annotate(count=Count('person')).order_by('district','name').all()
 
     return render(request, 'mainapp/relief_camps_list.html', {'filter': filter , 'relief_camps' : relief_camps, 'district_chosen' : len(request.GET.get('district') or '')>0 })
@@ -243,6 +243,17 @@ def districtmanager_list(request):
 
 class Maintenance(TemplateView):
     template_name = "mainapp/maintenance.html"
+
+def relief_camps_data(request):
+    try:
+        offset = int(request.GET.get('offset'))
+    except:
+        offset = 0
+    last_record = RescueCamp.objects.latest('id')
+    relief_camp_data = (RescueCamp.objects.filter(id__gt=offset).order_by('id')[:300]).values()
+    description = 'select * from mainapp_rescuecamp where id > offset order by id limit 300'
+    response = {'data': list(relief_camp_data), 'meta': {'offset': offset, 'limit': 300, 'description': description,'last_record_id': last_record.id}}
+    return JsonResponse(response, safe=False)
 
 def data(request):
     try:
@@ -390,7 +401,7 @@ class CampRequirementsForm(forms.ModelForm):
 class CampRequirements(SuccessMessageMixin,LoginRequiredMixin,UpdateView):
     login_url = '/login/'
     model = RescueCamp
-    template_name='mainapp/camp_requirements.html'  
+    template_name='mainapp/camp_requirements.html'
     form_class = CampRequirementsForm
     success_url = '/coordinator_home/'
     success_message = "Updated requirements saved!"
@@ -484,7 +495,7 @@ class CoordinatorCampFilter(django_filters.FilterSet):
             'district' : ['exact'],
             'name' : ['icontains']
         }
-    
+
     def __init__(self, *args, **kwargs):
         super(CoordinatorCampFilter, self).__init__(*args, **kwargs)
         if self.data == {}:
@@ -497,7 +508,7 @@ class CoordinatorCampFilter(django_filters.FilterSet):
             'district' : ['exact'],
             'name' : ['icontains']
         }
-    
+
     def __init__(self, *args, **kwargs):
         super(CoordinatorCampFilter, self).__init__(*args, **kwargs)
         if self.data == {}:
@@ -518,7 +529,9 @@ class CampRequirementsFilter(django_filters.FilterSet):
         model = RescueCamp
         fields = {
             'district' : ['exact'],
-            'name' : ['icontains']
+            'name' : ['icontains'],
+            'taluk' : ['icontains'],
+            'village' : ['icontains']
         }
 
     def __init__(self, *args, **kwargs):
@@ -533,4 +546,3 @@ def camp_requirements_list(request):
     page = request.GET.get('page')
     data = paginator.get_page(page)
     return render(request, "mainapp/camp_requirements_list.html", {'filter': filter , 'data' : data})
-
