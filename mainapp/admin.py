@@ -3,9 +3,12 @@ import csv
 from django.contrib import admin
 from django.core.validators import EMPTY_VALUES
 from django.http import HttpResponse
+from mainapp.redis_queue import bulk_csv_upload_queue
+from mainapp.csvimporter import import_inmate_file
+
 
 from .models import Request, Volunteer, Contributor, DistrictNeed, DistrictCollection, DistrictManager, vol_categories, \
-    RescueCamp, Person, NGO, Announcements, DataCollection , PrivateRescueCamp
+    RescueCamp, Person, NGO, Announcements, DataCollection , PrivateRescueCamp , CollectionCenter, CsvBulkUpload
 
 
 def create_csv_response(csv_name, header_row, body_rows):
@@ -59,8 +62,8 @@ class VolunteerAdmin(admin.ModelAdmin):
     actions = ['download_csv', 'mark_inactive', 'mark_active']
     readonly_fields = ('joined',)
     list_display = ('name', 'phone', 'organisation', 'joined', 'is_active')
-    list_filter = ('district', 'joined', 'is_active', 'has_consented')	
-    
+    list_filter = ('district', 'joined', 'is_active', 'has_consented')
+
     def download_csv(self, request, queryset):
         header_row = [f.name for f in Volunteer._meta.get_fields()]
         body_rows = []
@@ -119,6 +122,7 @@ class ContributorAdmin(admin.ModelAdmin):
     def mark_as_new(self, request, queryset):
         queryset.update(status='new')
         return
+
 
 class RescueCampAdmin(admin.ModelAdmin):
     actions = ['download_csv', 'download_inmates' ,  'mark_as_closed', 'mark_as_active']
@@ -180,7 +184,8 @@ class AnnouncementAdmin(admin.ModelAdmin):
 
 class PersonAdmin(admin.ModelAdmin):
     actions = ['download_csv']
-    list_display = ('name', 'phone', 'age', 'gender', 'district', 'camped_at')
+    list_display = ('name', 'camped_at', 'added_at', 'phone', 'age', 'gender', 'district')
+    ordering = ('-added_at',)
 
     def download_csv(self, request, queryset):
         header_row = ('name', 'phone', 'age', 'sex', 'district_name', 'camped_at')
@@ -197,6 +202,12 @@ class PersonAdmin(admin.ModelAdmin):
 class DataCollectionAdmin(admin.ModelAdmin):
     list_display = ['document_name', 'document', 'tag']
 
+class CsvBulkUploadAdmin(admin.ModelAdmin):
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        bulk_csv_upload_queue.enqueue(
+            import_inmate_file, obj.pk
+        )
 
 admin.site.register(Request, RequestAdmin)
 admin.site.register(Volunteer, VolunteerAdmin)
@@ -205,8 +216,10 @@ admin.site.register(DistrictNeed)
 admin.site.register(PrivateRescueCamp)
 admin.site.register(DistrictCollection)
 admin.site.register(DistrictManager)
+admin.site.register(CollectionCenter)
 admin.site.register(RescueCamp, RescueCampAdmin)
 admin.site.register(NGO, NGOAdmin)
 admin.site.register(Announcements, AnnouncementAdmin)
 admin.site.register(Person, PersonAdmin)
 admin.site.register(DataCollection, DataCollectionAdmin)
+admin.site.register(CsvBulkUpload, CsvBulkUploadAdmin)

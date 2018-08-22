@@ -7,7 +7,7 @@ from django.views.generic.list import ListView
 from mainapp.redis_queue import sms_queue
 from mainapp.sms_handler import send_confirmation_sms
 from .models import Request, Volunteer, DistrictManager, Contributor, DistrictNeed, Person, RescueCamp, NGO, \
-    Announcements , districts , PrivateRescueCamp
+    Announcements , districts, RequestUpdate, PrivateRescueCamp
 import django_filters
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.http import JsonResponse
@@ -105,7 +105,11 @@ class RegisterNGO(CreateView):
 class RegisterPrivateReliefCamp(CreateView):
     model = PrivateRescueCamp
     fields = '__all__'
-    success_url = '/reg_success'
+    success_url = '/pcamp'
+
+def privatecc(request):
+    return render(request,"privatecc.html")
+
 
 def pcamplist(request):
     filter = PrivateCampFilter(request.GET, queryset=PrivateRescueCamp.objects.all())
@@ -123,7 +127,7 @@ def pcampdetails(request):
         req_data = PrivateRescueCamp.objects.get(id=id)
     except:
         return HttpResponseRedirect("/error?error_text={}".format('Sorry, we couldnt fetch details for that Camp'))
-    return render(request, 'mainapp/p_camp_details.html', {'req': req_data }) 
+    return render(request, 'mainapp/p_camp_details.html', {'req': req_data })
 
 def download_ngo_list(request):
     district = request.GET.get('district', None)
@@ -349,9 +353,10 @@ def request_details(request, request_id=None):
     filter = RequestFilter(None)
     try:
         req_data = Request.objects.get(id=request_id)
+        updates = RequestUpdate.objects.all().filter(request_id=request_id).order_by('-update_ts')
     except:
         return HttpResponseRedirect("/error?error_text={}".format('Sorry, we couldnt fetch details for that request'))
-    return render(request, 'mainapp/request_details.html', {'filter' : filter, 'req': req_data })
+    return render(request, 'mainapp/request_details.html', {'filter' : filter, 'req': req_data, 'updates': updates })
 
 class DistrictManagerFilter(django_filters.FilterSet):
     class Meta:
@@ -512,6 +517,9 @@ def logout_view(request):
     return redirect('/relief_camps')
 
 class PersonForm(CustomForm):
+    checkin_date = forms.DateField(    required=False,input_formats=["%d-%m-%Y"],help_text="Use dd-mm-yyyy format. Eg. 18-08-2018")
+    checkout_date = forms.DateField(    required=False,input_formats=["%d-%m-%Y"],help_text="Use dd-mm-yyyy format. Eg. 21-08-2018")
+
     class Meta:
        model = Person
        fields = [
@@ -522,7 +530,10 @@ class PersonForm(CustomForm):
         'gender',
         'district',
         'address',
-        'notes'
+        'notes',
+        'checkin_date',
+        'checkout_date',
+        'status'
         ]
 
        widgets = {
@@ -530,7 +541,6 @@ class PersonForm(CustomForm):
            'notes': forms.Textarea(attrs={'rows':3}),
            'gender': forms.RadioSelect(),
         }
-
 
     def __init__(self, *args, **kwargs):
        camp_id = kwargs.pop('camp_id')
@@ -680,11 +690,14 @@ class PeopleFilter(django_filters.FilterSet):
 def find_people(request):
     filter = PeopleFilter(request.GET, queryset=Person.objects.all())
     people = filter.qs.order_by('name','-added_at')
-    paginator = Paginator(people, 50)
+    paginator = Paginator(people, PER_PAGE)
     page = request.GET.get('page')
     people = paginator.get_page(page)
-    return render(request, 'mainapp/people.html', {'filter': filter , "data" : people })
+    people.min_page = people.number - PAGE_LEFT
+    people.max_page = people.number + PAGE_RIGHT
+    people.lim_page = PAGE_INTERMEDIATE
 
+    return render(request, 'mainapp/people.html', {'filter': filter , "data" : people })
 
 def announcements(request):
     link_data = Announcements.objects.filter(is_pinned=False).order_by('-id').all()
@@ -710,7 +723,7 @@ class CoordinatorCampFilter(django_filters.FilterSet):
         if self.data == {}:
             self.queryset = self.queryset.none()
 
-            
+
 class PrivateCampFilter(django_filters.FilterSet):
     class Meta:
         model = PrivateRescueCamp
@@ -754,17 +767,17 @@ class VolunteerConsent(UpdateView):
     model = Volunteer
     fields = ['has_consented']
     success_url = '/consent_success/'
-    
+
     def dispatch(self, request, *args, **kwargs):
         timestamp = parser.parse(self.get_object().joined.isoformat())
         timestamp = calendar.timegm(timestamp.utctimetuple())
         timestamp = str(timestamp)[-4:]
         request_ts = kwargs['ts']
-        
+
         if request_ts != timestamp:
             return HttpResponseRedirect("/error?error_text={}".format('Sorry, we couldnt fetch volunteer info'))
         return super(VolunteerConsent, self).dispatch(request, *args, **kwargs)
-        
+
 
 class ConsentSuccess(TemplateView):
     template_name = "mainapp/volunteer_consent_success.html"
@@ -776,6 +789,44 @@ def camp_requirements_list(request):
     page = request.GET.get('page')
     data = paginator.get_page(page)
     return render(request, "mainapp/camp_requirements_list.html", {'filter': filter , 'data' : data})
+
+class RequestUpdateView(CreateView):
+    model = RequestUpdate
+    template_name='mainapp/request_update.html'
+    fields = [
+        'status',
+        'other_status',
+        'updater_name',
+        'updater_phone',
+        'notes'
+    ]
+    success_url = '/req_update_success/'
+
+    def original_request(self):
+        return self.original_request
+
+    def updates(self):
+        return self.updates
+
+    #@method_decorator(login_required)
+    def dispatch(self, request, *args, **kwargs):
+        #could not use login_required decorator because it redirects to /accounts/login and we need /login
+        #disable authentication
+        # if not request.user.is_authenticated:
+        #     return redirect('/login'+'?next=request_updates/'+kwargs['request_id']+'/')
+
+        self.original_request = get_object_or_404(Request, pk=kwargs['request_id'])
+        self.updates = RequestUpdate.objects.all().filter(request_id=kwargs['request_id']).order_by('-update_ts')
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        self.object = form.save(commit=False)
+        self.object.request = self.original_request
+        self.object = form.save()
+        return HttpResponseRedirect(self.get_success_url())
+
+class ReqUpdateSuccess(TemplateView):
+    template_name = "mainapp/request_update_success.html"
 
 
 class CollectionCenterListView(ListView):
@@ -795,11 +846,10 @@ class CollectionCenterView(CreateView):
         'address',
         'contacts',
         'type_of_materials_collecting',
+        'is_inside_kerala',
         'district',
         'lsg_type',
         'lsg_name',
         'ward_name',
-        'is_inside_kerala',
         'city',
     ]
-
